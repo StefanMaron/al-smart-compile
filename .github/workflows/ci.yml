@@ -233,7 +233,7 @@ jobs:
             echo "✓ Script exits on invalid flag (expected behavior)"
           fi
 
-  test-windows:
+  test-windows-bash:
     name: Test on Windows (Git Bash)
     runs-on: windows-latest
     defaults:
@@ -276,3 +276,52 @@ jobs:
             echo "✗ Failed to detect missing app.json"
             exit 1
           fi
+
+  test-windows-powershell:
+    name: Test on Windows (PowerShell)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test PowerShell script exists
+        run: |
+          if (Test-Path "al-compile.ps1") {
+            Write-Host "✓ al-compile.ps1 exists"
+          } else {
+            Write-Host "✗ al-compile.ps1 not found"
+            exit 1
+          }
+
+      - name: Test -Version flag
+        run: |
+          .\al-compile.ps1 -Version
+          Write-Host "✓ -Version works"
+
+      - name: Test -Help flag
+        run: |
+          .\al-compile.ps1 -Help
+          Write-Host "✓ -Help works"
+
+      - name: Test without app.json (should fail gracefully)
+        run: |
+          cd $env:TEMP
+          $output = & "$env:GITHUB_WORKSPACE\al-compile.ps1" 2>&1 | Out-String
+          if ($output -like "*app.json*") {
+            Write-Host "✓ Correctly detects missing app.json"
+          } else {
+            Write-Host "✗ Failed to detect missing app.json"
+            exit 1
+          }
+
+      - name: Test install.ps1 script
+        run: |
+          if (Test-Path "install.ps1") {
+            Write-Host "✓ install.ps1 exists"
+          } else {
+            Write-Host "✗ install.ps1 not found"
+            exit 1
+          }
