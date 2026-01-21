@@ -271,10 +271,10 @@ jobs:
         run: |
           mkdir -p /tmp/test-dir
           cd /tmp/test-dir
-          if "$GITHUB_WORKSPACE/al-compile" 2>&1 | grep -q "app.json"; then
-            echo "✓ Correctly detects missing app.json"
+          if ! "$GITHUB_WORKSPACE/al-compile" 2>/dev/null; then
+            echo "✓ Correctly exits with error when app.json missing"
           else
-            echo "✗ Failed to detect missing app.json"
+            echo "✗ Script should have failed without app.json"
             exit 1
           fi
 
@@ -310,11 +310,11 @@ jobs:
       - name: Test without app.json (should fail gracefully)
         run: |
           cd $env:TEMP
-          $output = & "$env:GITHUB_WORKSPACE\al-compile.ps1" 2>&1 | Out-String
-          if ($output -like "*app.json*") {
-            Write-Host "✓ Correctly detects missing app.json"
+          $result = & "$env:GITHUB_WORKSPACE\al-compile.ps1" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "✓ Correctly exits with error when app.json missing"
           } else {
-            Write-Host "✗ Failed to detect missing app.json"
+            Write-Host "✗ Script should have failed without app.json"
             exit 1
           }
 
