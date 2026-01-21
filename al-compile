@@ -79,10 +79,10 @@ load_config() {
     local config_file="$1"
 
     if [[ -f "$config_file" ]] && command -v jq &>/dev/null; then
-        # Read analyzers setting
+        # Read analyzers setting (config can override previous config, but not CLI)
         local cfg_analyzers
         cfg_analyzers=$(jq -r '.analyzers // empty' "$config_file" 2>/dev/null)
-        if [[ -n "$cfg_analyzers" && "$ANALYZERS" == "default" && -z "$CLI_ANALYZERS" ]]; then
+        if [[ -n "$cfg_analyzers" && -z "$CLI_ANALYZERS" ]]; then
             ANALYZERS="$cfg_analyzers"
         fi
 
