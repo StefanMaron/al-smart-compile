@@ -7,7 +7,7 @@
 - [x] Create GitHub repository
 - [x] Tag v1.0.0 release
 
-## Cross-Platform Support (v1.1)
+## Cross-Platform Support (v1.1) ✅ COMPLETED
 
 ### Windows Support ✅ COMPLETED (v1.1.0)
 - [x] Detect Windows platform (`uname` or check for PowerShell)
@@ -19,12 +19,12 @@
 - [x] Update README with Windows installation instructions
 - [x] Add Windows CI/CD testing (GitHub Actions with windows-latest)
 
-### macOS Support
-- [ ] Detect macOS platform
-- [ ] Use correct compiler binary: `bin/darwin/alc`
-- [ ] Test with macOS AL extension paths
-- [ ] Verify homebrew compatibility for installation
-- [ ] Update README with macOS installation instructions
+### macOS Support ✅ COMPLETED (v1.1.0)
+- [x] Detect macOS platform
+- [x] Use correct compiler binary: `bin/darwin/alc`
+- [x] Test with macOS AL extension paths
+- [x] Verify homebrew compatibility for installation
+- [x] Update README with macOS installation instructions
 
 ## Auto-Installation Features (v1.2)
 
@@ -79,20 +79,30 @@
 - [ ] Support analyzer-specific configurations
 - [ ] Handle analyzer conflicts/dependencies
 
-## Configuration File Support (v1.5)
+## Configuration File Support (v1.5) - PARTIAL
 
-### Project/Workspace Config
-- [ ] Support `.al-compile.json` or `.al-compile.yaml` in project root
-- [ ] Support workspace-level configuration
-- [ ] Configuration hierarchy: CLI args > project config > workspace config > defaults
-- [ ] Config options:
-  - Default analyzers
-  - Custom analyzer paths
-  - Compiler flags
-  - Error log location
-  - Ruleset preferences
+### Project/Workspace Config ✅ COMPLETED
+- [x] Support `.al-compile.json` in project root
+- [x] Support workspace-level configuration
+- [x] Configuration hierarchy: CLI args > project config > workspace config > defaults
+- [x] Config options:
+  - [x] Default analyzers
+  - [ ] Custom analyzer paths (planned for v1.4)
+  - [ ] Compiler flags (planned for v1.3)
+  - [x] Error log location
+  - [x] Ruleset preferences
 
-### Config Schema
+### Config Schema (Current Implementation)
+```json
+{
+  "analyzers": "default",
+  "output": ".dev/compile-errors.log",
+  "parallel": true,
+  "rulesets": true
+}
+```
+
+### Config Schema (Future - Full Implementation)
 ```json
 {
   "analyzers": {
@@ -196,8 +206,8 @@
 
 ## Version Plan
 
-- **v1.0.0** - Current Linux implementation (stable release)
-- **v1.1.0** - Cross-platform support (Windows + macOS)
+- **v1.0.0** - Linux implementation (stable release) ✅
+- **v1.1.0** - Cross-platform support (Windows + macOS) ✅
 - **v1.2.0** - Auto-installation features
 - **v1.3.0** - Additional compiler flags
 - **v1.4.0** - Custom analyzer support
