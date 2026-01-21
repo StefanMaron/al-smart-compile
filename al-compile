@@ -90,6 +90,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        --version)
+            echo "al-compile v${VERSION}"
+            exit 0
+            ;;
         -h|--help)
             usage
             ;;
