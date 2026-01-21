@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-21
+
+### Added
+- **Windows support**: Script now works on Windows via Git Bash, PowerShell, and WSL
+- **PowerShell version**: New `al-compile.ps1` script for native Windows PowerShell users
+  - Full feature parity with Bash version
+  - No Git Bash required for Windows users
+  - Native Windows path handling and color output
+- **PowerShell installer**: New `install.ps1` script for easy Windows installation
+- **macOS support**: Automatic detection and use of macOS AL compiler binary
+- Platform detection system that automatically identifies:
+  - Windows (Git Bash/MSYS2): Uses `%USERPROFILE%\.vscode\extensions` and `bin/win32/alc.exe`
+  - Windows (PowerShell): Uses `$env:USERPROFILE\.vscode\extensions` and `bin/win32/alc.exe`
+  - WSL (Windows Subsystem for Linux): Uses Linux paths and `bin/linux/alc`
+  - macOS: Uses `~/.vscode/extensions` and `bin/darwin/alc`
+  - Linux: Uses `~/.vscode/extensions` and `bin/linux/alc`
+- Platform information in verbose output (`--verbose` shows detected platform)
+- Windows testing in CI/CD pipeline (GitHub Actions with windows-latest runner)
+
+### Changed
+- Extension path detection now uses platform-specific base paths
+- Compiler binary selection is now platform-aware
+- README updated with platform-specific installation instructions
+- Troubleshooting section expanded with Windows-specific guidance
+
+### Technical Details
+- Single Bash script remains compatible across all platforms
+- Color output works correctly in Git Bash, WSL, and standard terminals
+- Package cache path separator (`;`) already compatible with Windows
+- Path handling works with both Windows backslashes and forward slashes
+
 ## [1.0.0] - 2026-01-21
 
 ### Added
@@ -46,4 +77,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Absolute path resolution for all compiler arguments
 - Proper handling of AppSourceCop configuration requirements
 
+[1.1.0]: https://github.com/StefanMaron/al-smart-compile/releases/tag/v1.1.0
 [1.0.0]: https://github.com/StefanMaron/al-smart-compile/releases/tag/v1.0.0

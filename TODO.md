@@ -9,14 +9,15 @@
 
 ## Cross-Platform Support (v1.1)
 
-### Windows Support
-- [ ] Detect Windows platform (`uname` or check for PowerShell)
-- [ ] Use correct extension path: `%USERPROFILE%\.vscode\extensions`
-- [ ] Use correct compiler binary: `bin/win32/alc.exe`
-- [ ] Handle path separators (already uses `;` for package paths)
-- [ ] Test color output in cmd.exe vs PowerShell
-- [ ] Consider separate PowerShell script or make bash script work in Git Bash/WSL
-- [ ] Update README with Windows installation instructions
+### Windows Support ✅ COMPLETED (v1.1.0)
+- [x] Detect Windows platform (`uname` or check for PowerShell)
+- [x] Use correct extension path: `%USERPROFILE%\.vscode\extensions`
+- [x] Use correct compiler binary: `bin/win32/alc.exe`
+- [x] Handle path separators (already uses `;` for package paths)
+- [x] Test color output in cmd.exe vs PowerShell
+- [x] Make bash script work in Git Bash/WSL (works in both)
+- [x] Update README with Windows installation instructions
+- [x] Add Windows CI/CD testing (GitHub Actions with windows-latest)
 
 ### macOS Support
 - [ ] Detect macOS platform

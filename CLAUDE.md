@@ -4,23 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-al-smart-compile is a Bash-based smart wrapper for the AL Language compiler (Microsoft Dynamics 365 Business Central development). It's a single-file shell script that auto-detects workspace structure, analyzers, package paths, and provides clean compilation output.
+al-smart-compile is a cross-platform smart wrapper for the AL Language compiler (Microsoft Dynamics 365 Business Central development). It's available as both a Bash script (`al-compile`) and PowerShell script (`al-compile.ps1`) that auto-detects workspace structure, analyzers, package paths, and provides clean compilation output.
 
 ## Architecture
 
 ### Single-File Design
-The entire tool is implemented in a single executable Bash script (`al-compile`) with no external dependencies except:
+The tool is implemented in two single-file scripts with feature parity:
+- **`al-compile`**: Bash script for Linux, macOS, Git Bash, and WSL
+- **`al-compile.ps1`**: PowerShell script for native Windows PowerShell/cmd.exe
+
+No external dependencies except:
 - AL Language extension for VS Code (required for compiler/analyzers)
-- `jq` for JSON parsing (optional but recommended for error reporting)
+- `jq` (Bash) or `ConvertFrom-Json` (PowerShell) for error log parsing (optional but recommended)
 
 ### Key Components (in al-compile script)
 
-**Environment Detection (lines 104-195)**
+**Platform Detection (lines 11-52)**
+- Detects platform: Linux, macOS, Windows (Git Bash), or WSL
+- Sets platform-specific paths for VS Code extensions:
+  - Linux/macOS/WSL: `~/.vscode/extensions`
+  - Windows (Git Bash): `$USERPROFILE/.vscode/extensions`
+  - Windows (PowerShell): `$env:USERPROFILE\.vscode\extensions`
+- Selects correct compiler binary:
+  - Linux/WSL: `bin/linux/alc`
+  - macOS: `bin/darwin/alc`
+  - Windows: `bin/win32/alc.exe`
+
+**Environment Detection (lines 170-240)**
 - Verifies AL project by checking for `app.json`
-- Auto-discovers AL extension directory in `~/.vscode/extensions/ms-dynamics-smb.al-*`
+- Auto-discovers AL extension directory in platform-specific extensions path
 - Detects multi-app workspace via `*.code-workspace` files in parent directories
 - Builds package cache paths from all `.alpackages` directories in workspace
-- Uses the compiler (`bin/linux/alc`) from the detected extension
+- Uses the platform-appropriate compiler from the detected extension
 
 **Analyzer Management (lines 206-295)**
 - Supports 5 analyzers: CodeCop, UICop, PerTenantExtensionCop, AppSourceCop, LinterCop
@@ -41,6 +56,8 @@ The entire tool is implemented in a single executable Bash script (`al-compile`)
 ## Common Commands
 
 ### Development
+
+**Bash (Linux/macOS/Git Bash/WSL):**
 ```bash
 # Basic compilation with default analyzers
 al-compile
@@ -50,6 +67,18 @@ al-compile --clean
 
 # Verbose output (shows detected paths, compiler version, full command)
 al-compile --verbose
+```
+
+**PowerShell (Windows):**
+```powershell
+# Basic compilation with default analyzers
+al-compile.ps1
+
+# Clean package cache and recompile
+al-compile.ps1 -Clean
+
+# Verbose output (shows detected paths, compiler version, full command)
+al-compile.ps1 -Verbose
 ```
 
 ### Testing Different Analyzer Configurations
@@ -139,4 +168,18 @@ When using `--analyzers` with comma-separated list, these aliases work:
 - Ruleset paths passed as absolute paths via `/ruleset:` flag
 
 ## Version Information
-Current version: 1.0.0 (see VERSION variable in al-compile:8)
+Current version: 1.1.0 (see VERSION variable in al-compile:8 and al-compile.ps1:13)
+
+## Platform Support
+
+### Bash Script (`al-compile`)
+- **Linux**: Full support with native `bin/linux/alc` compiler
+- **macOS**: Full support with native `bin/darwin/alc` compiler
+- **Windows (Git Bash)**: Full support using `bin/win32/alc.exe` compiler
+- **Windows (WSL)**: Full support using `bin/linux/alc` compiler (Linux mode)
+
+### PowerShell Script (`al-compile.ps1`)
+- **Windows (PowerShell)**: Full support with native `bin/win32/alc.exe` compiler
+- **Windows (cmd.exe)**: Works via `powershell -File al-compile.ps1`
+
+Both scripts have complete feature parity and automatically detect the correct platform and compiler to use.

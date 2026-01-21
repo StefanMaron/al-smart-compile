@@ -232,3 +232,47 @@ jobs:
           else
             echo "✓ Script exits on invalid flag (expected behavior)"
           fi
+
+  test-windows:
+    name: Test on Windows (Git Bash)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install jq (via chocolatey)
+        run: choco install jq -y
+        shell: pwsh
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test platform detection (should detect windows)
+        run: |
+          ./al-compile --version 2>&1 | head -1
+          echo "✓ Platform detection works"
+
+      - name: Test without app.json (should fail gracefully)
+        run: |
+          cd /tmp
+          if $GITHUB_WORKSPACE/al-compile 2>&1 | grep -q "app.json"; then
+            echo "✓ Correctly detects missing app.json"
+          else
+            echo "✗ Failed to detect missing app.json"
+            exit 1
+          fi

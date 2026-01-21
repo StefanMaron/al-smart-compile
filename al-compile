@@ -5,7 +5,58 @@
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
+
+# Detect platform
+detect_platform() {
+    local os_type=""
+
+    # Check for Windows using multiple methods
+    if [[ -n "${OS:-}" ]] && [[ "$OS" == "Windows_NT" ]]; then
+        os_type="windows"
+    elif [[ "$(uname -s 2>/dev/null)" == "MINGW"* ]] || [[ "$(uname -s 2>/dev/null)" == "MSYS"* ]]; then
+        os_type="windows"
+    elif [[ "$(uname -s 2>/dev/null)" == "Linux" ]]; then
+        # Check if we're in WSL
+        if grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null; then
+            os_type="wsl"
+        else
+            os_type="linux"
+        fi
+    elif [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; then
+        os_type="darwin"
+    else
+        os_type="linux"  # Default to Linux
+    fi
+
+    echo "$os_type"
+}
+
+PLATFORM=$(detect_platform)
+
+# Set platform-specific paths
+case "$PLATFORM" in
+    windows)
+        # Git Bash/MSYS2 on Windows - use Windows paths
+        VSCODE_EXT_BASE="${USERPROFILE:-$HOME}/.vscode/extensions"
+        COMPILER_BIN="bin/win32/alc.exe"
+        ;;
+    wsl)
+        # WSL - use Linux paths for WSL filesystem
+        VSCODE_EXT_BASE="$HOME/.vscode/extensions"
+        COMPILER_BIN="bin/linux/alc"
+        ;;
+    darwin)
+        # macOS
+        VSCODE_EXT_BASE="$HOME/.vscode/extensions"
+        COMPILER_BIN="bin/darwin/alc"
+        ;;
+    *)
+        # Linux (default)
+        VSCODE_EXT_BASE="$HOME/.vscode/extensions"
+        COMPILER_BIN="bin/linux/alc"
+        ;;
+esac
 
 # Colors for output
 RED='\033[0;31m'
@@ -120,10 +171,10 @@ if $VERBOSE; then
     info "Searching for AL extension..."
 fi
 
-AL_EXT_DIR=$(find ~/.vscode/extensions/ms-dynamics-smb.al-* -maxdepth 0 -type d 2>/dev/null | sort -V | tail -1)
+AL_EXT_DIR=$(find "$VSCODE_EXT_BASE"/ms-dynamics-smb.al-* -maxdepth 0 -type d 2>/dev/null | sort -V | tail -1)
 
 if [[ -z "$AL_EXT_DIR" ]]; then
-    error "AL extension not found in ~/.vscode/extensions/"
+    error "AL extension not found in $VSCODE_EXT_BASE"
     error "Please install the AL Language extension for VS Code"
     exit 1
 fi
@@ -132,6 +183,7 @@ ANALYZER_DIR="$AL_EXT_DIR/bin/Analyzers"
 AL_VERSION=$(basename "$AL_EXT_DIR" | sed 's/ms-dynamics-smb.al-//')
 
 if $VERBOSE; then
+    info "Platform: $PLATFORM"
     info "AL Extension: $AL_VERSION"
     info "Analyzers: $ANALYZER_DIR"
 fi
@@ -143,7 +195,7 @@ if [[ ! -d "$ANALYZER_DIR" ]]; then
 fi
 
 # Use compiler from extension (matches analyzer version)
-AL_COMPILER="$AL_EXT_DIR/bin/linux/alc"
+AL_COMPILER="$AL_EXT_DIR/$COMPILER_BIN"
 
 # Make sure compiler is executable
 if [[ ! -x "$AL_COMPILER" ]]; then

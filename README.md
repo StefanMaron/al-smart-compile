@@ -51,6 +51,7 @@ al-compile
 
 ## Features
 
+- **Cross-platform**: Works on Linux, Windows (Git Bash/WSL), and macOS
 - **Auto-detection**: Automatically finds AL extension, analyzers, and package directories
 - **Multi-app workspace support**: Detects `.code-workspace` files and includes all `.alpackages` paths
 - **Flexible analyzer configuration**: Choose default, all, none, or custom analyzer combinations
@@ -59,6 +60,8 @@ al-compile
 - **Parallel compilation**: Enabled by default for faster builds
 
 ## Installation
+
+### Linux / macOS
 
 ```bash
 # Copy to your local bin directory
@@ -69,14 +72,75 @@ chmod +x ~/.local/bin/al-compile
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+Or use the install script:
+
+```bash
+./install.sh
+```
+
+### Windows
+
+#### PowerShell (Recommended)
+
+**Easy installation:**
+```powershell
+# Run the installer script
+.\install.ps1
+
+# Restart your terminal, then use:
+al-compile.ps1
+```
+
+**Manual installation:**
+```powershell
+# Copy to your PowerShell profile directory
+$installDir = "$env:USERPROFILE\.local\bin"
+New-Item -ItemType Directory -Force -Path $installDir
+Copy-Item al-compile.ps1 $installDir\
+
+# Add to PATH (if not already added)
+$currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if ($currentPath -notlike "*$installDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$currentPath;$installDir", "User")
+}
+
+# Restart your terminal, then run:
+al-compile.ps1
+```
+
+#### Alternative: WSL (Windows Subsystem for Linux)
+
+If you prefer using WSL, follow the Linux installation instructions above. WSL is fully supported and uses the Linux AL compiler.
+
+#### Alternative: Git Bash
+
+If you have Git Bash installed:
+
+```bash
+mkdir -p ~/.local/bin
+cp al-compile ~/.local/bin/
+chmod +x ~/.local/bin/al-compile
+export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.bashrc
+```
+
 ## Quick Start
 
+**Linux / macOS / Git Bash:**
 ```bash
 # Navigate to your AL project directory
 cd /path/to/your/al-project
 
 # Run compilation with default settings
 al-compile
+```
+
+**Windows PowerShell:**
+```powershell
+# Navigate to your AL project directory
+cd C:\path\to\your\al-project
+
+# Run compilation with default settings
+al-compile.ps1
 ```
 
 ## Usage Examples
@@ -206,9 +270,13 @@ Comma-separated list of analyzers:
 
 ## Requirements
 
-- AL Language extension for VS Code installed
-- Symbols downloaded (run "AL: Download Symbols" in VS Code)
-- `jq` for error log parsing (optional but recommended)
+- **Platform**: Linux, macOS, or Windows (Git Bash/WSL)
+- **AL Language extension** for VS Code installed
+- **Symbols downloaded**: Run "AL: Download Symbols" in VS Code
+- **jq**: For error log parsing (optional but recommended)
+  - Linux: `sudo apt install jq` or `sudo dnf install jq`
+  - macOS: `brew install jq`
+  - Windows: `choco install jq` (Git Bash) or install in WSL
 
 ## Workspace Detection
 
@@ -247,7 +315,10 @@ Make sure you have the AL Language extension installed in VS Code:
 3. Search for "AL Language"
 4. Install the extension by Microsoft
 
-The extension should be in `~/.vscode/extensions/ms-dynamics-smb.al-*`
+The extension should be in:
+- **Linux/macOS**: `~/.vscode/extensions/ms-dynamics-smb.al-*`
+- **Windows**: `%USERPROFILE%\.vscode\extensions\ms-dynamics-smb.al-*`
+- **WSL**: `~/.vscode/extensions/ms-dynamics-smb.al-*`
 
 ### "No symbols found" or "Cannot resolve type" errors
 
@@ -292,6 +363,32 @@ Try:
 - `al-compile --no-parallel` to see if parallel compilation is causing issues
 - `al-compile --analyzers none` to disable analyzers temporarily
 - Check if your `.alpackages` directories contain unnecessary old symbols
+
+### Windows: "AL extension not found" error
+
+Make sure you're using the correct VS Code installation:
+- Check `%USERPROFILE%\.vscode\extensions` for the AL extension
+- If using VS Code Insiders, the path might be `%USERPROFILE%\.vscode-insiders\extensions`
+- For PowerShell: Use `al-compile.ps1`
+- For Git Bash/WSL: Use `al-compile` (requires Bash)
+
+### Windows: Script runs but uses wrong compiler
+
+The script automatically detects your environment and uses the correct compiler:
+- **PowerShell**: Uses Windows compiler (`bin/win32/alc.exe`)
+- **Git Bash**: Uses Windows compiler (`bin/win32/alc.exe`)
+- **WSL**: Uses Linux compiler (`bin/linux/alc`)
+
+To verify which platform is detected, run:
+```powershell
+# PowerShell
+al-compile.ps1 -Verbose
+
+# Git Bash/WSL
+al-compile --verbose
+```
+
+Look for the "Platform: windows/wsl/linux" line in the output.
 
 ## Contributing
 
