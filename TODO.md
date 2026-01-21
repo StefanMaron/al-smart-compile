@@ -3,7 +3,6 @@
 ## Pre-Release (v1.0.0)
 - [ ] Add LICENSE file (MIT suggested)
 - [ ] Add CHANGELOG.md
-- [ ] Test install.sh on clean system
 - [ ] Add usage examples/screenshots to README
 - [ ] Create GitHub repository
 - [ ] Tag v1.0.0 release
@@ -162,6 +161,9 @@
 - [ ] Consider chocolatey package (Windows)
 
 ### CI/CD
+- [ ] GitHub Actions workflow for testing (shellcheck, basic install test)
+- [ ] Test install.sh on clean Ubuntu/Debian container
+- [ ] Test install.sh on clean Fedora/RHEL container
 - [ ] GitHub Actions workflow for releases
 - [ ] Automated changelog generation
 - [ ] Automated GitHub release creation
