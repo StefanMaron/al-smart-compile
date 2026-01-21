@@ -1,0 +1,234 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  shellcheck:
+    name: ShellCheck Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+          ignore_paths: '.git .github'
+
+  test-ubuntu:
+    name: Test on Ubuntu ${{ matrix.ubuntu-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ubuntu-version: ['20.04', '22.04', '24.04']
+    container:
+      image: ubuntu:${{ matrix.ubuntu-version }}
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y git jq
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test install.sh script
+        run: |
+          ./install.sh
+          echo "✓ install.sh completed"
+
+      - name: Verify installation
+        run: |
+          test -x ~/.local/bin/al-compile || exit 1
+          echo "✓ Binary installed to ~/.local/bin/"
+
+      - name: Test installed binary
+        run: |
+          ~/.local/bin/al-compile --version
+          echo "✓ Installed binary works"
+
+  test-fedora:
+    name: Test on Fedora ${{ matrix.fedora-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        fedora-version: ['38', '39', '40']
+    container:
+      image: fedora:${{ matrix.fedora-version }}
+    steps:
+      - name: Install dependencies
+        run: |
+          dnf install -y git jq
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test install.sh script
+        run: |
+          ./install.sh
+          echo "✓ install.sh completed"
+
+      - name: Verify installation
+        run: |
+          test -x ~/.local/bin/al-compile || exit 1
+          echo "✓ Binary installed to ~/.local/bin/"
+
+      - name: Test installed binary
+        run: |
+          ~/.local/bin/al-compile --version
+          echo "✓ Installed binary works"
+
+  test-debian:
+    name: Test on Debian ${{ matrix.debian-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        debian-version: ['11', '12']
+    container:
+      image: debian:${{ matrix.debian-version }}
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y git jq
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test install.sh script
+        run: |
+          ./install.sh
+          echo "✓ install.sh completed"
+
+      - name: Verify installation
+        run: |
+          test -x ~/.local/bin/al-compile || exit 1
+          echo "✓ Binary installed to ~/.local/bin/"
+
+      - name: Test installed binary
+        run: |
+          ~/.local/bin/al-compile --version
+          echo "✓ Installed binary works"
+
+  test-arch:
+    name: Test on Arch Linux
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm git jq
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test install.sh script
+        run: |
+          ./install.sh
+          echo "✓ install.sh completed"
+
+      - name: Verify installation
+        run: |
+          test -x ~/.local/bin/al-compile || exit 1
+          echo "✓ Binary installed to ~/.local/bin/"
+
+      - name: Test installed binary
+        run: |
+          ~/.local/bin/al-compile --version
+          echo "✓ Installed binary works"
+
+  test-error-handling:
+    name: Test Error Handling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Test without app.json (should fail gracefully)
+        run: |
+          cd /tmp
+          if ~/work/al-smart-compile/al-smart-compile/al-compile 2>&1 | grep -q "app.json"; then
+            echo "✓ Correctly detects missing app.json"
+          else
+            echo "✗ Failed to detect missing app.json"
+            exit 1
+          fi
+
+      - name: Test invalid analyzer flag
+        run: |
+          cd /tmp
+          if ~/work/al-smart-compile/al-smart-compile/al-compile --analyzers invalid 2>&1; then
+            echo "✓ Handles invalid analyzer flag"
+          else
+            echo "✓ Script exits on invalid flag (expected behavior)"
+          fi

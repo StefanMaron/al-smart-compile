@@ -1,5 +1,9 @@
 # al-smart-compile
 
+[![CI](https://github.com/StefanMaron/al-smart-compile/actions/workflows/ci.yml/badge.svg)](https://github.com/StefanMaron/al-smart-compile/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/StefanMaron/al-smart-compile)](https://github.com/StefanMaron/al-smart-compile/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A smart wrapper for the AL Language compiler (Business Central development) that auto-detects workspace structure, analyzers, and package paths.
 
 ## Table of Contents

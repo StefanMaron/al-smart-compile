@@ -161,12 +161,12 @@
 - [ ] Consider chocolatey package (Windows)
 
 ### CI/CD
-- [ ] GitHub Actions workflow for testing (shellcheck, basic install test)
-- [ ] Test install.sh on clean Ubuntu/Debian container
-- [ ] Test install.sh on clean Fedora/RHEL container
-- [ ] GitHub Actions workflow for releases
+- [x] GitHub Actions workflow for testing (shellcheck, basic install test)
+- [x] Test install.sh on clean Ubuntu/Debian container
+- [x] Test install.sh on clean Fedora/RHEL container
+- [x] GitHub Actions workflow for releases
 - [ ] Automated changelog generation
-- [ ] Automated GitHub release creation
+- [x] Automated GitHub release creation
 - [ ] Version bump automation
 
 ## Nice-to-Have Features

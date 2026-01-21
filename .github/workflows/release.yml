@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          # Extract the section for this version from CHANGELOG.md
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release notes for version $VERSION" > release_notes.md
+            echo "" >> release_notes.md
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md) for details." >> release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            al-compile
+            install.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-release:
+    name: Test Release Installation
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - name: Download release artifact
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          wget https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/al-compile
+          wget https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/install.sh
+          chmod +x al-compile install.sh
+
+      - name: Test release binary
+        run: |
+          ./al-compile --version
+          ./al-compile --help
+
+      - name: Test release installer
+        run: |
+          ./install.sh
+          test -x ~/.local/bin/al-compile
+          ~/.local/bin/al-compile --version
