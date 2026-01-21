@@ -18,6 +18,7 @@ A smart wrapper for the AL Language compiler (Business Central development) that
 - [Workspace Detection](#workspace-detection)
 - [Error Reporting](#error-reporting)
 - [Options](#options)
+- [Configuration File](#configuration-file)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -303,6 +304,62 @@ Error summary is displayed on failure with:
 --verbose, -v        Verbose output
 --version            Show version information
 --help, -h           Show this help
+```
+
+## Configuration File
+
+You can create a `.al-compile.json` file in your project or workspace root to set default options. CLI arguments always override config file settings.
+
+### Config File Location
+
+The tool searches for config files in this order (later files override earlier ones):
+1. Workspace root (next to `.code-workspace` file)
+2. Project root (next to `app.json`)
+
+### Config File Format
+
+```json
+{
+  "analyzers": "default",
+  "output": ".dev/compile-errors.log",
+  "parallel": true,
+  "rulesets": true
+}
+```
+
+### Config Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `analyzers` | string | `"default"` | Analyzer mode: `default`, `all`, `none`, or comma-separated list |
+| `output` | string | `".dev/compile-errors.log"` | Path to error log file |
+| `parallel` | boolean | `true` | Enable parallel compilation |
+| `rulesets` | boolean | `true` | Enable external ruleset support |
+
+### Example Configurations
+
+**Minimal config (disable all analyzers for faster builds):**
+```json
+{
+  "analyzers": "none"
+}
+```
+
+**AppSource validation config:**
+```json
+{
+  "analyzers": "all",
+  "output": "build/errors.json"
+}
+```
+
+**Team config with specific analyzers:**
+```json
+{
+  "analyzers": "CodeCop,UICop,LinterCop",
+  "parallel": true,
+  "rulesets": true
+}
 ```
 
 ## Troubleshooting

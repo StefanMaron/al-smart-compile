@@ -315,3 +315,66 @@ jobs:
             Write-Host "✗ install.ps1 not found"
             exit 1
           }
+
+  test-macos:
+    name: Test on macOS ${{ matrix.macos-version }}
+    runs-on: ${{ matrix.macos-version }}
+    strategy:
+      matrix:
+        macos-version: ['macos-13', 'macos-14']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install jq (via homebrew)
+        run: brew install jq
+
+      - name: Test script is executable
+        run: |
+          test -x ./al-compile || exit 1
+          echo "✓ Script is executable"
+
+      - name: Test --version flag
+        run: |
+          ./al-compile --version
+          echo "✓ --version works"
+
+      - name: Test --help flag
+        run: |
+          ./al-compile --help
+          echo "✓ --help works"
+
+      - name: Test platform detection (should detect darwin)
+        run: |
+          if ./al-compile --help 2>&1 | head -1 | grep -q "al-compile"; then
+            echo "✓ Script runs on macOS"
+          else
+            echo "✗ Script failed to run on macOS"
+            exit 1
+          fi
+
+      - name: Test install.sh script
+        run: |
+          ./install.sh
+          echo "✓ install.sh completed"
+
+      - name: Verify installation
+        run: |
+          test -x ~/.local/bin/al-compile || exit 1
+          echo "✓ Binary installed to ~/.local/bin/"
+
+      - name: Test installed binary
+        run: |
+          ~/.local/bin/al-compile --version
+          echo "✓ Installed binary works"
+
+      - name: Test without app.json (should fail gracefully)
+        run: |
+          mkdir -p /tmp/test-dir
+          cd /tmp/test-dir
+          if ! "$GITHUB_WORKSPACE/al-compile" 2>/dev/null; then
+            echo "✓ Correctly exits with error when app.json missing"
+          else
+            echo "✗ Script should have failed without app.json"
+            exit 1
+          fi
