@@ -269,8 +269,9 @@ jobs:
 
       - name: Test without app.json (should fail gracefully)
         run: |
-          cd /tmp
-          if $GITHUB_WORKSPACE/al-compile 2>&1 | grep -q "app.json"; then
+          mkdir -p /tmp/test-dir
+          cd /tmp/test-dir
+          if "$GITHUB_WORKSPACE/al-compile" 2>&1 | grep -q "app.json"; then
             echo "✓ Correctly detects missing app.json"
           else
             echo "✗ Failed to detect missing app.json"

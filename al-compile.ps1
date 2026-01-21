@@ -13,7 +13,7 @@ param(
     [switch]$Help
 )
 
-$script:VERSION = "1.1.0"
+$SCRIPT_VERSION = "1.1.0"
 
 # Colors for output
 function Write-Info { Write-Host "ℹ $args" -ForegroundColor Blue }
@@ -24,7 +24,7 @@ function Write-ErrorMsg { Write-Host "✗ $args" -ForegroundColor Red }
 # Show usage
 function Show-Usage {
     Write-Host @"
-al-compile v$VERSION - Smart AL compiler wrapper (PowerShell)
+al-compile v$SCRIPT_VERSION - Smart AL compiler wrapper (PowerShell)
 
 Usage: al-compile.ps1 [OPTIONS]
 
@@ -59,7 +59,7 @@ EXAMPLES:
 # Handle flags
 if ($Help) { Show-Usage }
 if ($Version) {
-    Write-Host "al-compile v$VERSION (PowerShell)"
+    Write-Host "al-compile v$SCRIPT_VERSION (PowerShell)"
     exit 0
 }
 
