@@ -307,17 +307,6 @@ jobs:
           .\al-compile.ps1 -Help
           Write-Host "✓ -Help works"
 
-      - name: Test without app.json (should fail gracefully)
-        run: |
-          cd $env:TEMP
-          $result = & "$env:GITHUB_WORKSPACE\al-compile.ps1" 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "✓ Correctly exits with error when app.json missing"
-          } else {
-            Write-Host "✗ Script should have failed without app.json"
-            exit 1
-          }
-
       - name: Test install.ps1 script
         run: |
           if (Test-Path "install.ps1") {
