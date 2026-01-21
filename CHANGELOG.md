@@ -46,4 +46,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Absolute path resolution for all compiler arguments
 - Proper handling of AppSourceCop configuration requirements
 
-[1.0.0]: https://github.com/USERNAME/al-smart-compile/releases/tag/v1.0.0
+[1.0.0]: https://github.com/StefanMaron/al-smart-compile/releases/tag/v1.0.0
