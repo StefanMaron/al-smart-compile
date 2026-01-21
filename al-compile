@@ -73,6 +73,12 @@ VERBOSE=false
 PARALLEL=true
 ENABLE_RULESETS=true
 
+# Track which options were set via CLI (to give them priority)
+CLI_ANALYZERS=""
+CLI_OUTPUT=""
+CLI_PARALLEL=""
+CLI_RULESETS=""
+
 # Load configuration from .al-compile.json files
 # Priority: CLI args > project config > workspace config > defaults
 load_config() {
@@ -119,12 +125,6 @@ load_config() {
     fi
     return 1
 }
-
-# Track which options were set via CLI (to give them priority)
-CLI_ANALYZERS=""
-CLI_OUTPUT=""
-CLI_PARALLEL=""
-CLI_RULESETS=""
 
 # Function to print colored messages
 info() { echo -e "${BLUE}ℹ${NC} $*"; }
