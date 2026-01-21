@@ -1,0 +1,4 @@
+*.log
+.dev/
+.vscode/
+.alpackages/

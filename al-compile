@@ -1,0 +1,403 @@
+#!/usr/bin/env bash
+# al-compile - Smart wrapper for AL Language compiler
+# Auto-detects workspace structure, analyzers, and package paths
+# Version: 1.0.0
+
+set -euo pipefail
+
+VERSION="1.0.0"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default options
+CLEAN=false
+ANALYZERS="default"  # default, all, none, or comma-separated list
+ERROR_LOG=".dev/compile-errors.log"
+VERBOSE=false
+PARALLEL=true
+ENABLE_RULESETS=true
+
+# Function to print colored messages
+info() { echo -e "${BLUE}ℹ${NC} $*"; }
+success() { echo -e "${GREEN}✓${NC} $*"; }
+warning() { echo -e "${YELLOW}⚠${NC} $*"; }
+error() { echo -e "${RED}✗${NC} $*" >&2; }
+
+# Show usage
+usage() {
+    cat <<EOF
+al-compile v${VERSION} - Smart AL compiler wrapper
+
+Usage: al-compile [OPTIONS]
+
+Auto-detects workspace structure, analyzers, and package paths.
+
+OPTIONS:
+    --clean              Clean .alpackages before compiling
+    --analyzers <mode>   Analyzer mode: default, all, none, or comma-separated list
+                         default: CodeCop, UICop, PerTenantExtensionCop, LinterCop
+                                  (+ AppSourceCop if AppSourceCop.json exists)
+                         all: All available analyzers including AppSourceCop
+                         none: No analyzers
+                         list: CodeCop,UICop,AppSourceCop (custom selection)
+    --output <file>      Error log output file (default: .dev/compile-errors.log)
+    --no-parallel        Disable parallel compilation
+    --no-rulesets        Disable external ruleset support
+    --verbose, -v        Verbose output
+    --version            Show version information
+    --help, -h           Show this help
+
+EXAMPLES:
+    al-compile                          # Basic compile with default analyzers
+    al-compile --clean                  # Clean and compile
+    al-compile --analyzers all          # Compile with all analyzers
+    al-compile --analyzers CodeCop,UICop # Compile with specific analyzers
+    al-compile --output errors.json     # Custom error log location
+
+EOF
+    exit 0
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --clean)
+            CLEAN=true
+            shift
+            ;;
+        --analyzers)
+            ANALYZERS="$2"
+            shift 2
+            ;;
+        --output)
+            ERROR_LOG="$2"
+            shift 2
+            ;;
+        --no-parallel)
+            PARALLEL=false
+            shift
+            ;;
+        --no-rulesets)
+            ENABLE_RULESETS=false
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Verify we're in an AL project
+if [[ ! -f "app.json" ]]; then
+    error "Not in an AL project directory (app.json not found)"
+    exit 1
+fi
+
+# Read project name from app.json
+PROJECT_NAME=$(jq -r '.name // "Unknown"' app.json 2>/dev/null || echo "Unknown")
+info "Project: $PROJECT_NAME"
+
+# Find AL extension and analyzers
+if $VERBOSE; then
+    info "Searching for AL extension..."
+fi
+
+AL_EXT_DIR=$(find ~/.vscode/extensions/ms-dynamics-smb.al-* -maxdepth 0 -type d 2>/dev/null | sort -V | tail -1)
+
+if [[ -z "$AL_EXT_DIR" ]]; then
+    error "AL extension not found in ~/.vscode/extensions/"
+    error "Please install the AL Language extension for VS Code"
+    exit 1
+fi
+
+ANALYZER_DIR="$AL_EXT_DIR/bin/Analyzers"
+AL_VERSION=$(basename "$AL_EXT_DIR" | sed 's/ms-dynamics-smb.al-//')
+
+if $VERBOSE; then
+    info "AL Extension: $AL_VERSION"
+    info "Analyzers: $ANALYZER_DIR"
+fi
+
+# Verify analyzers directory exists
+if [[ ! -d "$ANALYZER_DIR" ]]; then
+    error "Analyzers directory not found: $ANALYZER_DIR"
+    exit 1
+fi
+
+# Use compiler from extension (matches analyzer version)
+AL_COMPILER="$AL_EXT_DIR/bin/linux/alc"
+
+# Make sure compiler is executable
+if [[ ! -x "$AL_COMPILER" ]]; then
+    chmod +x "$AL_COMPILER" 2>/dev/null || true
+fi
+
+# Verify compiler exists and is executable
+if [[ ! -x "$AL_COMPILER" ]]; then
+    error "AL compiler not found or not executable: $AL_COMPILER"
+    error "Please ensure the AL extension is properly installed"
+    exit 1
+fi
+
+if $VERBOSE; then
+    COMPILER_VERSION=$("$AL_COMPILER" version 2>&1 | grep "version" | head -1 || echo "Unknown")
+    info "Compiler: $COMPILER_VERSION"
+fi
+
+# Detect workspace structure
+WORKSPACE_FILE=$(find .. ../.. -maxdepth 1 -name "*.code-workspace" 2>/dev/null | head -1)
+
+if [[ -n "$WORKSPACE_FILE" ]]; then
+    info "Multi-app workspace detected: $(basename "$WORKSPACE_FILE")"
+    WORKSPACE_ROOT=$(dirname "$WORKSPACE_FILE")
+
+    # Find all .alpackages directories in workspace
+    PACKAGE_DIRS=$(find "$WORKSPACE_ROOT" -maxdepth 2 -type d -name ".alpackages" 2>/dev/null)
+
+    if [[ -z "$PACKAGE_DIRS" ]]; then
+        warning "No .alpackages directories found in workspace"
+        PACKAGE_PATH=".alpackages"
+    else
+        # Build semicolon-separated path list (AL compiler format)
+        PACKAGE_PATH=$(echo "$PACKAGE_DIRS" | tr '\n' ';' | sed 's/;$//')
+
+        if $VERBOSE; then
+            info "Package paths:"
+            echo "$PACKAGE_DIRS" | while read -r dir; do
+                echo "  - $dir"
+            done
+        fi
+    fi
+else
+    info "Single-app project"
+    PACKAGE_PATH=".alpackages"
+fi
+
+# Verify package cache exists
+if [[ ! -d ".alpackages" ]]; then
+    warning ".alpackages directory not found"
+    warning "Run 'AL: Download Symbols' in VS Code first"
+fi
+
+# Clean if requested
+if $CLEAN; then
+    info "Cleaning .alpackages..."
+    if [[ -d ".alpackages" ]]; then
+        rm -rf .alpackages/*
+        success "Cleaned package cache"
+    fi
+fi
+
+# Build analyzer arguments based on mode
+ANALYZER_ARGS=()
+
+# Available analyzers
+CODECOP="$ANALYZER_DIR/Microsoft.Dynamics.Nav.CodeCop.dll"
+UICOP="$ANALYZER_DIR/Microsoft.Dynamics.Nav.UICop.dll"
+PERTENANT="$ANALYZER_DIR/Microsoft.Dynamics.Nav.PerTenantExtensionCop.dll"
+APPSOURCE="$ANALYZER_DIR/Microsoft.Dynamics.Nav.AppSourceCop.dll"
+LINTERCOP="$ANALYZER_DIR/BusinessCentral.LinterCop.dll"
+
+case "$ANALYZERS" in
+    none)
+        info "Analyzers: None"
+        ;;
+    all)
+        info "Analyzers: All"
+        [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
+        [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
+        [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
+        [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
+        [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+        ;;
+    default)
+        # Auto-include AppSourceCop if config exists
+        if [[ -f "AppSourceCop.json" ]]; then
+            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, LinterCop, AppSourceCop)"
+            [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
+            [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
+            [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
+            [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+            [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
+        else
+            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, LinterCop)"
+            [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
+            [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
+            [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
+            [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+        fi
+        ;;
+    *)
+        # Custom comma-separated list
+        info "Analyzers: Custom ($ANALYZERS)"
+        IFS=',' read -ra ANALYZER_LIST <<< "$ANALYZERS"
+        for analyzer in "${ANALYZER_LIST[@]}"; do
+            analyzer=$(echo "$analyzer" | xargs) # trim whitespace
+            case "$analyzer" in
+                CodeCop)
+                    [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
+                    ;;
+                UICop)
+                    [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
+                    ;;
+                PerTenantExtensionCop|PerTenant)
+                    [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
+                    ;;
+                AppSourceCop|AppSource)
+                    [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
+                    ;;
+                LinterCop|Linter)
+                    [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+                    ;;
+                *)
+                    warning "Unknown analyzer: $analyzer"
+                    ;;
+            esac
+        done
+        ;;
+esac
+
+# Check if AppSourceCop is enabled and warn if config is missing
+USING_APPSOURCECOP=false
+for arg in "${ANALYZER_ARGS[@]}"; do
+    if [[ "$arg" == *"AppSourceCop"* ]]; then
+        USING_APPSOURCECOP=true
+        break
+    fi
+done
+
+if $USING_APPSOURCECOP; then
+    if [[ ! -f "AppSourceCop.json" ]]; then
+        echo
+        warning "AppSourceCop is enabled but AppSourceCop.json not found"
+        warning "AppSourceCop diagnostics will be silently hidden without this config file"
+        warning "Create AppSourceCop.json next to app.json with mandatory properties:"
+        echo "  {"
+        echo "    \"mandatoryAffixes\": [\"YourPrefix\"],"
+        echo "    \"supportedCountries\": [\"US\"]"
+        echo "  }"
+        echo
+    fi
+fi
+
+# Find ruleset file
+RULESET=""
+if [[ -n "$WORKSPACE_FILE" ]]; then
+    WORKSPACE_ROOT=$(dirname "$WORKSPACE_FILE")
+    if [[ -f "$WORKSPACE_ROOT/custom.ruleset.json" ]]; then
+        RULESET="$WORKSPACE_ROOT/custom.ruleset.json"
+    fi
+fi
+
+# Fallback to local rulesets
+if [[ -z "$RULESET" ]]; then
+    if [[ -f "AppSourceCop.json" ]]; then
+        RULESET="$(pwd)/AppSourceCop.json"
+    elif [[ -f "../custom.ruleset.json" ]]; then
+        RULESET="$(cd .. && pwd)/custom.ruleset.json"
+    elif [[ -f "custom.ruleset.json" ]]; then
+        RULESET="$(pwd)/custom.ruleset.json"
+    fi
+fi
+
+if [[ -n "$RULESET" ]]; then
+    info "Ruleset: $(basename "$RULESET")"
+else
+    if $VERBOSE; then
+        info "Ruleset: None"
+    fi
+fi
+
+# Create .dev directory if needed
+mkdir -p "$(dirname "$ERROR_LOG")"
+
+# Build compilation command
+COMPILE_CMD=(
+    "$AL_COMPILER"
+    /project:"."
+    /packagecachepath:"$PACKAGE_PATH"
+    "${ANALYZER_ARGS[@]}"
+)
+
+# Add ruleset if found
+if [[ -n "$RULESET" ]]; then
+    COMPILE_CMD+=(/ruleset:"$RULESET")
+    if $ENABLE_RULESETS; then
+        COMPILE_CMD+=(/enableexternalrulesets)
+    fi
+fi
+
+# Add optional flags
+if $PARALLEL; then
+    COMPILE_CMD+=(/parallel)
+fi
+
+COMPILE_CMD+=(
+    /reportsuppresseddiagnostics
+    /errorlog:"$ERROR_LOG"
+)
+
+# Show command if verbose
+if $VERBOSE; then
+    info "Command:"
+    printf '  %s\n' "${COMPILE_CMD[@]}"
+    echo
+fi
+
+# Run compilation
+info "Compiling..."
+echo
+
+if "${COMPILE_CMD[@]}" 2>&1; then
+    echo
+    success "Compilation succeeded!"
+
+    # Show summary if error log exists
+    if [[ -f "$ERROR_LOG" ]]; then
+        # Check for any diagnostics (even if compilation succeeded)
+        DIAGNOSTIC_COUNT=$(jq -r '.diagnostics | length' "$ERROR_LOG" 2>/dev/null || echo "0")
+        if [[ "$DIAGNOSTIC_COUNT" -gt 0 ]]; then
+            info "Diagnostics: $DIAGNOSTIC_COUNT (see $ERROR_LOG)"
+        fi
+    fi
+
+    exit 0
+else
+    echo
+    error "Compilation failed"
+
+    if [[ -f "$ERROR_LOG" ]]; then
+        info "Error log: $ERROR_LOG"
+
+        # Try to parse and show error summary
+        if command -v jq &>/dev/null; then
+            ERROR_COUNT=$(jq -r '[.diagnostics[] | select(.severity == "Error")] | length' "$ERROR_LOG" 2>/dev/null || echo "?")
+            WARNING_COUNT=$(jq -r '[.diagnostics[] | select(.severity == "Warning")] | length' "$ERROR_LOG" 2>/dev/null || echo "?")
+
+            echo
+            error "Errors: $ERROR_COUNT"
+            warning "Warnings: $WARNING_COUNT"
+
+            # Show first few errors
+            echo
+            info "First errors:"
+            jq -r '.diagnostics[] | select(.severity == "Error") | "\(.code): \(.message) in \(.source)(\(.range.start.line),\(.range.start.character))"' "$ERROR_LOG" 2>/dev/null | head -5 || true
+        fi
+    fi
+
+    exit 1
+fi
