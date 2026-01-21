@@ -2,6 +2,49 @@
 
 A smart wrapper for the AL Language compiler (Business Central development) that auto-detects workspace structure, analyzers, and package paths.
 
+## Table of Contents
+
+- [Why use this?](#why-use-this)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Analyzer Modes](#analyzer-modes)
+- [Requirements](#requirements)
+- [Workspace Detection](#workspace-detection)
+- [Error Reporting](#error-reporting)
+- [Options](#options)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why use this?
+
+If you're developing for Microsoft Dynamics 365 Business Central using AL, you typically have to:
+
+1. Find the AL extension path manually
+2. Locate the compiler binary for your platform
+3. Specify analyzer DLL paths one by one
+4. Hunt down all `.alpackages` directories in multi-app workspaces
+5. Remember complex compiler flags and syntax
+
+**al-smart-compile does all of this automatically.**
+
+Instead of this:
+```bash
+~/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/linux/alc \
+  /project:/path/to/project \
+  /packagecachepath:/path/to/.alpackages \
+  /analyzer:~/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/Microsoft.Dynamics.Nav.CodeCop.dll \
+  /analyzer:~/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/Microsoft.Dynamics.Nav.UICop.dll \
+  # ... more flags ...
+```
+
+You just type:
+```bash
+al-compile
+```
+
 ## Features
 
 - **Auto-detection**: Automatically finds AL extension, analyzers, and package directories
@@ -22,12 +65,97 @@ chmod +x ~/.local/bin/al-compile
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-# Basic compile with default analyzers
-al-compile
+# Navigate to your AL project directory
+cd /path/to/your/al-project
 
+# Run compilation with default settings
+al-compile
+```
+
+## Usage Examples
+
+### Basic Compilation
+
+```bash
+al-compile
+```
+
+**Output:**
+```
+ℹ Detected AL extension: /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234
+ℹ Compiler version: 14.2.1234.5678
+ℹ Using default analyzers: CodeCop, UICop, PerTenantExtensionCop, LinterCop
+ℹ Compiling...
+✓ Compilation successful!
+✓ Output: MyExtension_1.0.0.0.app
+```
+
+### Compilation with Errors
+
+When compilation fails, you get a structured error summary:
+
+```bash
+al-compile
+```
+
+**Output:**
+```
+ℹ Detected AL extension: /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234
+ℹ Compiler version: 14.2.1234.5678
+ℹ Using default analyzers: CodeCop, UICop, PerTenantExtensionCop, LinterCop
+ℹ Compiling...
+✗ Compilation failed!
+
+Error Summary:
+  Total errors: 3
+  Total warnings: 7
+
+First 5 errors:
+  1. [AL0118] src/HelloWorld.al:15:9
+     The name 'CustomerRec' does not exist in the current context
+
+  2. [AL0132] src/Tables/Customer.al:42:5
+     Field 'Email' must have a value
+
+  3. [CodeCop AA0001] src/Codeunit/MyCodeunit.al:28:1
+     There must be exactly one space character on each side of a binary operator
+
+Error log saved to: .dev/compile-errors.log
+```
+
+### Verbose Mode
+
+See exactly what the tool detects and the full compiler command:
+
+```bash
+al-compile --verbose
+```
+
+**Output:**
+```
+ℹ Detected AL extension: /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234
+ℹ Compiler: /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/linux/alc
+ℹ Compiler version: 14.2.1234.5678
+ℹ Project directory: /home/user/projects/my-bc-app
+ℹ Package cache paths:
+    /home/user/projects/my-bc-app/.alpackages
+ℹ Using default analyzers: CodeCop, UICop, PerTenantExtensionCop, LinterCop
+ℹ Analyzer paths:
+    /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/Microsoft.Dynamics.Nav.CodeCop.dll
+    /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/Microsoft.Dynamics.Nav.UICop.dll
+    /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/Microsoft.Dynamics.Nav.PerTenantExtensionCop.dll
+    /home/user/.vscode/extensions/ms-dynamics-smb.al-14.2.1234/bin/Analyzers/LinterCop.dll
+ℹ Compiling...
+✓ Compilation successful!
+✓ Output: MyExtension_1.0.0.0.app
+```
+
+### Common Workflows
+
+```bash
 # Clean and compile
 al-compile --clean
 
@@ -37,14 +165,14 @@ al-compile --analyzers all
 # Compile with specific analyzers
 al-compile --analyzers CodeCop,UICop
 
-# Compile without analyzers
+# Compile without analyzers (fastest)
 al-compile --analyzers none
 
 # Custom error log location
 al-compile --output errors.json
 
-# Verbose output
-al-compile --verbose
+# Disable parallel compilation (useful for debugging)
+al-compile --no-parallel
 ```
 
 ## Analyzer Modes
@@ -104,6 +232,68 @@ Error summary is displayed on failure with:
 --version            Show version information
 --help, -h           Show this help
 ```
+
+## Troubleshooting
+
+### "AL extension not found"
+
+Make sure you have the AL Language extension installed in VS Code:
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search for "AL Language"
+4. Install the extension by Microsoft
+
+The extension should be in `~/.vscode/extensions/ms-dynamics-smb.al-*`
+
+### "No symbols found" or "Cannot resolve type" errors
+
+Download symbols first:
+1. Open your AL project in VS Code
+2. Press Ctrl+Shift+P
+3. Run "AL: Download Symbols"
+4. Wait for download to complete
+5. Try `al-compile` again
+
+### Compilation succeeds but no .app file
+
+Check your `app.json` file:
+- Ensure `version` field is set
+- Ensure `name` and `publisher` fields are set
+- The output file will be named `{name}_{version}.app`
+
+### "Permission denied" when running al-compile
+
+Make the script executable:
+```bash
+chmod +x ~/.local/bin/al-compile
+```
+
+### AppSourceCop warnings about missing configuration
+
+Either:
+- Create an `AppSourceCop.json` in your project root with required fields
+- Use `--analyzers` without AppSourceCop: `al-compile --analyzers CodeCop,UICop`
+
+Example `AppSourceCop.json`:
+```json
+{
+  "mandatoryAffixes": ["YourPrefix"],
+  "supportedCountries": ["US"]
+}
+```
+
+### Slow compilation in large workspaces
+
+Try:
+- `al-compile --no-parallel` to see if parallel compilation is causing issues
+- `al-compile --analyzers none` to disable analyzers temporarily
+- Check if your `.alpackages` directories contain unnecessary old symbols
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests on GitHub.
+
+See [TODO.md](TODO.md) for planned features and roadmap.
 
 ## License
 
