@@ -1,11 +1,11 @@
 # TODO / Roadmap
 
-## Pre-Release (v1.0.0)
-- [ ] Add LICENSE file (MIT suggested)
-- [ ] Add CHANGELOG.md
-- [ ] Add usage examples/screenshots to README
-- [ ] Create GitHub repository
-- [ ] Tag v1.0.0 release
+## Pre-Release (v1.0.0) ✅ COMPLETED
+- [x] Add LICENSE file (MIT suggested)
+- [x] Add CHANGELOG.md
+- [x] Add usage examples/screenshots to README
+- [x] Create GitHub repository
+- [x] Tag v1.0.0 release
 
 ## Cross-Platform Support (v1.1)
 
@@ -116,16 +116,16 @@
 ## Quality Improvements
 
 ### Testing
-- [ ] Add shellcheck to CI
+- [x] Add shellcheck to CI
 - [ ] Add bats (Bash Automated Testing System) tests
 - [ ] Test multi-app workspace scenarios
 - [ ] Test single-app scenarios
 - [ ] Test analyzer combinations
-- [ ] Test error handling and edge cases
+- [x] Test error handling and edge cases
 
 ### Error Handling
 - [ ] Better error messages for common issues
-- [ ] Troubleshooting guide in README
+- [x] Troubleshooting guide in README
 - [ ] Validate dependencies before compilation
 - [ ] Check for common misconfigurations
 
@@ -138,10 +138,10 @@
 ## Documentation
 
 ### README Enhancements
-- [ ] Add "Why use this?" / comparison section
-- [ ] Add troubleshooting section
+- [x] Add "Why use this?" / comparison section
+- [x] Add troubleshooting section
 - [ ] Add FAQ section
-- [ ] Add screenshots/examples of output
+- [x] Add screenshots/examples of output
 - [ ] Add architecture/how it works diagram
 - [ ] Document all environment variables
 - [ ] Add video demo/asciinema recording
