@@ -354,8 +354,9 @@ fi
 RULESET=""
 if [[ -n "$WORKSPACE_FILE" ]]; then
     WORKSPACE_ROOT=$(dirname "$WORKSPACE_FILE")
-    if [[ -f "$WORKSPACE_ROOT/custom.ruleset.json" ]]; then
-        RULESET="$WORKSPACE_ROOT/custom.ruleset.json"
+    WORKSPACE_RULESET=$(find "$WORKSPACE_ROOT" -maxdepth 1 -name "*ruleset.json" -type f | head -n 1)
+    if [[ -n "$WORKSPACE_RULESET" ]]; then
+        RULESET="$WORKSPACE_RULESET"
     fi
 fi
 
@@ -363,10 +364,16 @@ fi
 if [[ -z "$RULESET" ]]; then
     if [[ -f "AppSourceCop.json" ]]; then
         RULESET="$(pwd)/AppSourceCop.json"
-    elif [[ -f "../custom.ruleset.json" ]]; then
-        RULESET="$(cd .. && pwd)/custom.ruleset.json"
-    elif [[ -f "custom.ruleset.json" ]]; then
-        RULESET="$(pwd)/custom.ruleset.json"
+    else
+        PARENT_RULESET=$(find .. -maxdepth 1 -name "*ruleset.json" -type f | head -n 1)
+        if [[ -n "$PARENT_RULESET" ]]; then
+            RULESET="$(cd .. && pwd)/$(basename "$PARENT_RULESET")"
+        else
+            CURRENT_RULESET=$(find . -maxdepth 1 -name "*ruleset.json" -type f | head -n 1)
+            if [[ -n "$CURRENT_RULESET" ]]; then
+                RULESET="$(pwd)/$(basename "$CURRENT_RULESET")"
+            fi
+        fi
     fi
 fi
 

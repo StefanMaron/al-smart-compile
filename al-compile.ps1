@@ -243,9 +243,9 @@ if ($usingAppSourceCop -and -not (Test-Path "AppSourceCop.json")) {
 # Find ruleset file
 $ruleset = $null
 if ($workspaceFile) {
-    $workspaceRuleset = Join-Path $workspaceRoot "custom.ruleset.json"
-    if (Test-Path $workspaceRuleset) {
-        $ruleset = $workspaceRuleset
+    $workspaceRulesetFiles = Get-ChildItem -Path $workspaceRoot -Filter "*ruleset.json" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($workspaceRulesetFiles) {
+        $ruleset = $workspaceRulesetFiles.FullName
     }
 }
 
@@ -253,10 +253,16 @@ if ($workspaceFile) {
 if (-not $ruleset) {
     if (Test-Path "AppSourceCop.json") {
         $ruleset = (Get-Item "AppSourceCop.json").FullName
-    } elseif (Test-Path "..\custom.ruleset.json") {
-        $ruleset = (Get-Item "..\custom.ruleset.json").FullName
-    } elseif (Test-Path "custom.ruleset.json") {
-        $ruleset = (Get-Item "custom.ruleset.json").FullName
+    } else {
+        $parentRulesetFiles = Get-ChildItem -Path ".." -Filter "*ruleset.json" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($parentRulesetFiles) {
+            $ruleset = $parentRulesetFiles.FullName
+        } else {
+            $currentRulesetFiles = Get-ChildItem -Path "." -Filter "*ruleset.json" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($currentRulesetFiles) {
+                $ruleset = $currentRulesetFiles.FullName
+            }
+        }
     }
 }
 
