@@ -15,6 +15,53 @@ param(
 
 $SCRIPT_VERSION = "1.1.0"
 
+# Track CLI-provided options (to give them priority over config)
+$CLI_Analyzers = $PSBoundParameters.ContainsKey('Analyzers') -and $Analyzers -ne "default"
+$CLI_Output = $PSBoundParameters.ContainsKey('Output') -and $Output -ne ".dev/compile-errors.log"
+$CLI_NoParallel = $PSBoundParameters.ContainsKey('NoParallel')
+$CLI_NoRulesets = $PSBoundParameters.ContainsKey('NoRulesets')
+
+# Load configuration from .al-compile.json file
+function Load-Config {
+    param([string]$ConfigPath)
+
+    if (Test-Path $ConfigPath) {
+        try {
+            $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+
+            # Apply analyzers if not set via CLI
+            if (-not $script:CLI_Analyzers -and $config.PSObject.Properties['analyzers']) {
+                $script:Analyzers = $config.analyzers
+            }
+
+            # Apply output if not set via CLI
+            if (-not $script:CLI_Output -and $config.PSObject.Properties['output']) {
+                $script:Output = $config.output
+            }
+
+            # Apply parallel if not set via CLI
+            if (-not $script:CLI_NoParallel -and $config.PSObject.Properties['parallel']) {
+                if ($config.parallel -eq $false) {
+                    $script:NoParallel = $true
+                }
+            }
+
+            # Apply rulesets if not set via CLI
+            if (-not $script:CLI_NoRulesets -and $config.PSObject.Properties['rulesets']) {
+                if ($config.rulesets -eq $false) {
+                    $script:NoRulesets = $true
+                }
+            }
+
+            return $true
+        } catch {
+            # Silently ignore parse errors
+            return $false
+        }
+    }
+    return $false
+}
+
 # Colors for output
 function Write-Info { Write-Host "ℹ $args" -ForegroundColor Blue }
 function Write-Success { Write-Host "✓ $args" -ForegroundColor Green }
@@ -44,6 +91,16 @@ OPTIONS:
     -Verbose            Verbose output
     -Version            Show version information
     -Help               Show this help
+
+CONFIGURATION FILE:
+    Create .al-compile.json in project or workspace root to set defaults:
+    {
+      "analyzers": "default",
+      "output": ".dev/compile-errors.log",
+      "parallel": true,
+      "rulesets": true
+    }
+    CLI arguments override config file settings.
 
 EXAMPLES:
     al-compile.ps1                                # Basic compile with default analyzers
@@ -152,7 +209,29 @@ if ($workspaceFile) {
     }
 } else {
     Write-Info "Single-app project"
+    $workspaceRoot = $null
     $packagePath = ".alpackages"
+}
+
+# Load configuration files (workspace config first, then project config overrides)
+# CLI args have already been parsed and take highest priority
+$configLoaded = $false
+if ($workspaceRoot -and (Test-Path (Join-Path $workspaceRoot ".al-compile.json"))) {
+    if (Load-Config (Join-Path $workspaceRoot ".al-compile.json")) {
+        if ($Verbose) {
+            Write-Info "Config: $workspaceRoot\.al-compile.json (workspace)"
+        }
+        $configLoaded = $true
+    }
+}
+
+if (Test-Path ".al-compile.json") {
+    if (Load-Config ".al-compile.json") {
+        if ($Verbose) {
+            Write-Info "Config: .al-compile.json (project)"
+        }
+        $configLoaded = $true
+    }
 }
 
 # Verify package cache exists
