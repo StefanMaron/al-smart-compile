@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # al-compile - Smart wrapper for AL Language compiler
 # Auto-detects workspace structure, analyzers, and package paths
-# Version: 1.0.0
+# Version: 2.0.0
 
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="2.0.0"
 
 # Detect platform
 detect_platform() {
@@ -91,11 +91,17 @@ Auto-detects workspace structure, analyzers, and package paths.
 OPTIONS:
     --clean              Clean .alpackages before compiling
     --analyzers <mode>   Analyzer mode: default, all, none, or comma-separated list
-                         default: CodeCop, UICop, PerTenantExtensionCop, LinterCop
+                         default: CodeCop, UICop, PerTenantExtensionCop,
+                                  ALCops (LinterCop, ApplicationCop, FormattingCop,
+                                  PlatformCop, DocumentationCop, TestAutomationCop),
+                                  TestQualityCop, ClaudeCodeCop
                                   (+ AppSourceCop if AppSourceCop.json exists)
                          all: All available analyzers including AppSourceCop
                          none: No analyzers
-                         list: CodeCop,UICop,AppSourceCop (custom selection)
+                         list: CodeCop,UICop,ALCopsLinter (custom selection)
+                         Entries can also be absolute DLL paths:
+                           /path/to/MyAnalyzer.dll
+                           CodeCop,/path/to/MyAnalyzer.dll
     --output <file>      Error log output file (default: .dev/compile-errors.log)
     --no-parallel        Disable parallel compilation
     --no-rulesets        Disable external ruleset support
@@ -104,11 +110,13 @@ OPTIONS:
     --help, -h           Show this help
 
 EXAMPLES:
-    al-compile                          # Basic compile with default analyzers
-    al-compile --clean                  # Clean and compile
-    al-compile --analyzers all          # Compile with all analyzers
-    al-compile --analyzers CodeCop,UICop # Compile with specific analyzers
-    al-compile --output errors.json     # Custom error log location
+    al-compile                                    # Basic compile with default analyzers
+    al-compile --clean                            # Clean and compile
+    al-compile --analyzers all                    # Compile with all analyzers
+    al-compile --analyzers CodeCop,UICop          # Compile with specific named analyzers
+    al-compile --analyzers /path/to/Foo.dll       # Run only one hard-coded analyzer
+    al-compile --analyzers none                   # Compile without any analyzers
+    al-compile --output errors.json               # Custom error log location
 
 EOF
     exit 0
@@ -221,8 +229,8 @@ if [[ -n "$WORKSPACE_FILE" ]]; then
     info "Multi-app workspace detected: $(basename "$WORKSPACE_FILE")"
     WORKSPACE_ROOT=$(dirname "$WORKSPACE_FILE")
 
-    # Find all .alpackages directories in workspace
-    PACKAGE_DIRS=$(find "$WORKSPACE_ROOT" -maxdepth 2 -type d -name ".alpackages" 2>/dev/null)
+    # Find all .alpackages directories in workspace (search deep enough for nested apps)
+    PACKAGE_DIRS=$(find "$WORKSPACE_ROOT" -maxdepth 4 -type d -name ".alpackages" 2>/dev/null)
 
     if [[ -z "$PACKAGE_DIRS" ]]; then
         warning "No .alpackages directories found in workspace"
@@ -261,12 +269,39 @@ fi
 # Build analyzer arguments based on mode
 ANALYZER_ARGS=()
 
-# Available analyzers
+# Available analyzers (Microsoft built-ins)
 CODECOP="$ANALYZER_DIR/Microsoft.Dynamics.Nav.CodeCop.dll"
 UICOP="$ANALYZER_DIR/Microsoft.Dynamics.Nav.UICop.dll"
 PERTENANT="$ANALYZER_DIR/Microsoft.Dynamics.Nav.PerTenantExtensionCop.dll"
 APPSOURCE="$ANALYZER_DIR/Microsoft.Dynamics.Nav.AppSourceCop.dll"
-LINTERCOP="$ANALYZER_DIR/BusinessCentral.LinterCop.dll"
+TESTQUALITYCOP="$ANALYZER_DIR/BusinessCentral.TestQualityCop.dll"
+CLAUDECODECOP="$ANALYZER_DIR/BusinessCentral.ClaudeCodeCop.dll"
+
+# ALCops analyzers (from NuGet package)
+ALCOPS_BASE="$HOME/.nuget/packages/alcops.analyzers"
+ALCOPS_VERSION=$(ls "$ALCOPS_BASE" 2>/dev/null | sort -V | tail -1)
+ALCOPS_DIR="$ALCOPS_BASE/$ALCOPS_VERSION/lib/netstandard2.1"
+if $VERBOSE && [[ -n "$ALCOPS_VERSION" ]]; then
+    info "ALCops: $ALCOPS_VERSION ($ALCOPS_DIR)"
+fi
+ALCOPS_COMMON="$ALCOPS_DIR/ALCops.Common.dll"
+ALCOPS_LINTERCOP="$ALCOPS_DIR/ALCops.LinterCop.dll"
+ALCOPS_APPLICATIONCOP="$ALCOPS_DIR/ALCops.ApplicationCop.dll"
+ALCOPS_FORMATTINGCOP="$ALCOPS_DIR/ALCops.FormattingCop.dll"
+ALCOPS_PLATFORMCOP="$ALCOPS_DIR/ALCops.PlatformCop.dll"
+ALCOPS_DOCUMENTATIONCOP="$ALCOPS_DIR/ALCops.DocumentationCop.dll"
+ALCOPS_TESTAUTOMATIONCOP="$ALCOPS_DIR/ALCops.TestAutomationCop.dll"
+
+# Validate ALCops installation when it will be used (default/all modes only)
+if [[ "$ANALYZERS" == "default" || "$ANALYZERS" == "all" ]] && [[ -z "$ALCOPS_VERSION" || ! -f "$ALCOPS_LINTERCOP" ]]; then
+    echo
+    error "ALCops analyzers not found in ~/.nuget/packages/alcops.analyzers/"
+    warning "Install the ALCops VS Code extension (arthurvdv.alcops) — it manages the DLLs automatically"
+    warning "Or download manually from: https://www.nuget.org/packages/ALCops.Analyzers"
+    warning "To skip ALCops: al-compile --analyzers none"
+    echo
+    exit 1
+fi
 
 case "$ANALYZERS" in
     none)
@@ -278,23 +313,47 @@ case "$ANALYZERS" in
         [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
         [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
         [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
-        [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+        [[ -f "$ALCOPS_COMMON" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_COMMON")
+        [[ -f "$ALCOPS_LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_LINTERCOP")
+        [[ -f "$ALCOPS_APPLICATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_APPLICATIONCOP")
+        [[ -f "$ALCOPS_FORMATTINGCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_FORMATTINGCOP")
+        [[ -f "$ALCOPS_PLATFORMCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_PLATFORMCOP")
+        [[ -f "$ALCOPS_DOCUMENTATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_DOCUMENTATIONCOP")
+        [[ -f "$ALCOPS_TESTAUTOMATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_TESTAUTOMATIONCOP")
+        [[ -f "$TESTQUALITYCOP" ]] && ANALYZER_ARGS+=("/analyzer:$TESTQUALITYCOP")
+        [[ -f "$CLAUDECODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CLAUDECODECOP")
         ;;
     default)
         # Auto-include AppSourceCop if config exists
         if [[ -f "AppSourceCop.json" ]]; then
-            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, LinterCop, AppSourceCop)"
+            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, ALCops, TestQualityCop, ClaudeCodeCop, AppSourceCop)"
             [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
             [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
             [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
-            [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+            [[ -f "$ALCOPS_COMMON" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_COMMON")
+            [[ -f "$ALCOPS_LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_LINTERCOP")
+            [[ -f "$ALCOPS_APPLICATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_APPLICATIONCOP")
+            [[ -f "$ALCOPS_FORMATTINGCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_FORMATTINGCOP")
+            [[ -f "$ALCOPS_PLATFORMCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_PLATFORMCOP")
+            [[ -f "$ALCOPS_DOCUMENTATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_DOCUMENTATIONCOP")
+            [[ -f "$ALCOPS_TESTAUTOMATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_TESTAUTOMATIONCOP")
+            [[ -f "$TESTQUALITYCOP" ]] && ANALYZER_ARGS+=("/analyzer:$TESTQUALITYCOP")
+            [[ -f "$CLAUDECODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CLAUDECODECOP")
             [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
         else
-            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, LinterCop)"
+            info "Analyzers: Default (CodeCop, UICop, PerTenantExtensionCop, ALCops, TestQualityCop, ClaudeCodeCop)"
             [[ -f "$CODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CODECOP")
             [[ -f "$UICOP" ]] && ANALYZER_ARGS+=("/analyzer:$UICOP")
             [[ -f "$PERTENANT" ]] && ANALYZER_ARGS+=("/analyzer:$PERTENANT")
-            [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+            [[ -f "$ALCOPS_COMMON" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_COMMON")
+            [[ -f "$ALCOPS_LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_LINTERCOP")
+            [[ -f "$ALCOPS_APPLICATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_APPLICATIONCOP")
+            [[ -f "$ALCOPS_FORMATTINGCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_FORMATTINGCOP")
+            [[ -f "$ALCOPS_PLATFORMCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_PLATFORMCOP")
+            [[ -f "$ALCOPS_DOCUMENTATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_DOCUMENTATIONCOP")
+            [[ -f "$ALCOPS_TESTAUTOMATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_TESTAUTOMATIONCOP")
+            [[ -f "$TESTQUALITYCOP" ]] && ANALYZER_ARGS+=("/analyzer:$TESTQUALITYCOP")
+            [[ -f "$CLAUDECODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CLAUDECODECOP")
         fi
         ;;
     *)
@@ -316,16 +375,70 @@ case "$ANALYZERS" in
                 AppSourceCop|AppSource)
                     [[ -f "$APPSOURCE" ]] && ANALYZER_ARGS+=("/analyzer:$APPSOURCE")
                     ;;
-                LinterCop|Linter)
-                    [[ -f "$LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$LINTERCOP")
+                ALCops|alcops)
+                    [[ -f "$ALCOPS_COMMON" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_COMMON")
+                    [[ -f "$ALCOPS_LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_LINTERCOP")
+                    [[ -f "$ALCOPS_APPLICATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_APPLICATIONCOP")
+                    [[ -f "$ALCOPS_FORMATTINGCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_FORMATTINGCOP")
+                    [[ -f "$ALCOPS_PLATFORMCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_PLATFORMCOP")
+                    [[ -f "$ALCOPS_DOCUMENTATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_DOCUMENTATIONCOP")
+                    [[ -f "$ALCOPS_TESTAUTOMATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_TESTAUTOMATIONCOP")
+                    ;;
+                ALCopsLinter|LinterCop|Linter)
+                    [[ -f "$ALCOPS_LINTERCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_LINTERCOP")
+                    ;;
+                ALCopsApplication|ApplicationCop)
+                    [[ -f "$ALCOPS_APPLICATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_APPLICATIONCOP")
+                    ;;
+                ALCopsFormatting|FormattingCop)
+                    [[ -f "$ALCOPS_FORMATTINGCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_FORMATTINGCOP")
+                    ;;
+                ALCopsPlatform|PlatformCop)
+                    [[ -f "$ALCOPS_PLATFORMCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_PLATFORMCOP")
+                    ;;
+                ALCopsDocumentation|DocumentationCop)
+                    [[ -f "$ALCOPS_DOCUMENTATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_DOCUMENTATIONCOP")
+                    ;;
+                ALCopsTestAutomation|TestAutomationCop)
+                    [[ -f "$ALCOPS_TESTAUTOMATIONCOP" ]] && ANALYZER_ARGS+=("/analyzer:$ALCOPS_TESTAUTOMATIONCOP")
+                    ;;
+                TestQualityCop|TestQuality)
+                    [[ -f "$TESTQUALITYCOP" ]] && ANALYZER_ARGS+=("/analyzer:$TESTQUALITYCOP")
+                    ;;
+                ClaudeCodeCop|Claude)
+                    [[ -f "$CLAUDECODECOP" ]] && ANALYZER_ARGS+=("/analyzer:$CLAUDECODECOP")
                     ;;
                 *)
-                    warning "Unknown analyzer: $analyzer"
+                    # Check if it looks like a file path (absolute, relative, or .dll extension)
+                    if [[ "$analyzer" == /* ]] || [[ "$analyzer" == ./* ]] || [[ "$analyzer" == ../* ]] || [[ "$analyzer" == *.dll ]]; then
+                        # Expand tilde if present
+                        expanded="${analyzer/#\~/$HOME}"
+                        if [[ -f "$expanded" ]]; then
+                            ANALYZER_ARGS+=("/analyzer:$expanded")
+                        else
+                            warning "Analyzer DLL not found: $analyzer"
+                        fi
+                    else
+                        warning "Unknown analyzer: $analyzer"
+                    fi
                     ;;
             esac
         done
         ;;
 esac
+
+# Auto-discover custom analyzers in local .analyzers folder
+if [[ -d ".analyzers" ]]; then
+    CUSTOM_ANALYZERS=()
+    while IFS= read -r -d '' analyzer; do
+        CUSTOM_ANALYZERS+=("$analyzer")
+        ANALYZER_ARGS+=("/analyzer:$analyzer")
+    done < <(find .analyzers -maxdepth 1 -name "*.dll" -print0 2>/dev/null)
+
+    if [[ ${#CUSTOM_ANALYZERS[@]} -gt 0 ]]; then
+        info "Custom analyzers: ${CUSTOM_ANALYZERS[*]}"
+    fi
+fi
 
 # Check if AppSourceCop is enabled and warn if config is missing
 USING_APPSOURCECOP=false
@@ -359,14 +472,12 @@ if [[ -n "$WORKSPACE_FILE" ]]; then
     fi
 fi
 
-# Fallback to local rulesets
+# Fallback to local rulesets (prefer custom.ruleset.json over AppSourceCop.json)
 if [[ -z "$RULESET" ]]; then
-    if [[ -f "AppSourceCop.json" ]]; then
-        RULESET="$(pwd)/AppSourceCop.json"
+    if [[ -f "custom.ruleset.json" ]]; then
+        RULESET="$(pwd)/custom.ruleset.json"
     elif [[ -f "../custom.ruleset.json" ]]; then
         RULESET="$(cd .. && pwd)/custom.ruleset.json"
-    elif [[ -f "custom.ruleset.json" ]]; then
-        RULESET="$(pwd)/custom.ruleset.json"
     fi
 fi
 
