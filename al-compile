@@ -66,17 +66,19 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default options
+PROJECT_DIR=""
 CLEAN=false
 ANALYZERS="default"  # default, all, none, or comma-separated list
 ERROR_LOG=".dev/compile-errors.log"
 VERBOSE=false
+QUIET=false
 PARALLEL=true
 ENABLE_RULESETS=true
 
-# Function to print colored messages
-info() { echo -e "${BLUE}ℹ${NC} $*"; }
-success() { echo -e "${GREEN}✓${NC} $*"; }
-warning() { echo -e "${YELLOW}⚠${NC} $*"; }
+# Function to print colored messages (suppressed in --quiet mode, except error)
+info() { $QUIET || echo -e "${BLUE}ℹ${NC} $*"; }
+success() { $QUIET || echo -e "${GREEN}✓${NC} $*"; }
+warning() { $QUIET || echo -e "${YELLOW}⚠${NC} $*"; }
 error() { echo -e "${RED}✗${NC} $*" >&2; }
 
 # Show usage
@@ -106,6 +108,9 @@ OPTIONS:
     --no-parallel        Disable parallel compilation
     --no-rulesets        Disable external ruleset support
     --verbose, -v        Verbose output
+    --quiet, -q          Suppress info/banner output. On failure, emit only a
+                         clean error list (one diagnostic per line) to stderr.
+                         Designed for hooks and scripts that want minimal noise.
     --version            Show version information
     --help, -h           Show this help
 
@@ -125,6 +130,10 @@ EOF
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --dir)
+            PROJECT_DIR="$2"
+            shift 2
+            ;;
         --clean)
             CLEAN=true
             shift
@@ -149,6 +158,10 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
+        -q|--quiet)
+            QUIET=true
+            shift
+            ;;
         --version)
             echo "al-compile v${VERSION}"
             exit 0
@@ -164,9 +177,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Resolve --dir to a project root containing app.json
+if [[ -n "$PROJECT_DIR" ]]; then
+    SEARCH=$(realpath "$PROJECT_DIR" 2>/dev/null || echo "$PROJECT_DIR")
+    [[ -f "$SEARCH" ]] && SEARCH=$(dirname "$SEARCH")
+    while [[ "$SEARCH" != "/" ]]; do
+        if [[ -f "$SEARCH/app.json" ]]; then
+            cd "$SEARCH"
+            break
+        fi
+        SEARCH=$(dirname "$SEARCH")
+    done
+    if [[ ! -f "app.json" ]]; then
+        error "No app.json found above: $PROJECT_DIR"
+        exit 1
+    fi
+fi
+
 # Verify we're in an AL project
 if [[ ! -f "app.json" ]]; then
     error "Not in an AL project directory (app.json not found)"
+    error "Use --dir <path> to specify a file or directory inside the project"
     exit 1
 fi
 
@@ -277,12 +308,10 @@ APPSOURCE="$ANALYZER_DIR/Microsoft.Dynamics.Nav.AppSourceCop.dll"
 TESTQUALITYCOP="$ANALYZER_DIR/BusinessCentral.TestQualityCop.dll"
 CLAUDECODECOP="$ANALYZER_DIR/BusinessCentral.ClaudeCodeCop.dll"
 
-# ALCops analyzers (from NuGet package)
-ALCOPS_BASE="$HOME/.nuget/packages/alcops.analyzers"
-ALCOPS_VERSION=$(ls "$ALCOPS_BASE" 2>/dev/null | sort -V | tail -1)
-ALCOPS_DIR="$ALCOPS_BASE/$ALCOPS_VERSION/lib/netstandard2.1"
-if $VERBOSE && [[ -n "$ALCOPS_VERSION" ]]; then
-    info "ALCops: $ALCOPS_VERSION ($ALCOPS_DIR)"
+# ALCops analyzers — bundled in the AL extension (version-matched to the compiler)
+ALCOPS_DIR="$ANALYZER_DIR"
+if $VERBOSE; then
+    info "ALCops: bundled in AL extension ($ALCOPS_DIR)"
 fi
 ALCOPS_COMMON="$ALCOPS_DIR/ALCops.Common.dll"
 ALCOPS_LINTERCOP="$ALCOPS_DIR/ALCops.LinterCop.dll"
@@ -293,11 +322,10 @@ ALCOPS_DOCUMENTATIONCOP="$ALCOPS_DIR/ALCops.DocumentationCop.dll"
 ALCOPS_TESTAUTOMATIONCOP="$ALCOPS_DIR/ALCops.TestAutomationCop.dll"
 
 # Validate ALCops installation when it will be used (default/all modes only)
-if [[ "$ANALYZERS" == "default" || "$ANALYZERS" == "all" ]] && [[ -z "$ALCOPS_VERSION" || ! -f "$ALCOPS_LINTERCOP" ]]; then
+if [[ "$ANALYZERS" == "default" || "$ANALYZERS" == "all" ]] && [[ ! -f "$ALCOPS_LINTERCOP" ]]; then
     echo
-    error "ALCops analyzers not found in ~/.nuget/packages/alcops.analyzers/"
-    warning "Install the ALCops VS Code extension (arthurvdv.alcops) — it manages the DLLs automatically"
-    warning "Or download manually from: https://www.nuget.org/packages/ALCops.Analyzers"
+    error "ALCops analyzers not found in AL extension: $ALCOPS_DIR"
+    warning "Ensure the AL Language extension is up to date"
     warning "To skip ALCops: al-compile --analyzers none"
     echo
     exit 1
@@ -529,13 +557,21 @@ fi
 info "Compiling..."
 echo
 
-if "${COMPILE_CMD[@]}" 2>&1; then
-    echo
-    success "Compilation succeeded!"
+COMPILE_RC=0
+if $QUIET; then
+    "${COMPILE_CMD[@]}" >/dev/null 2>&1 || COMPILE_RC=$?
+else
+    "${COMPILE_CMD[@]}" 2>&1 || COMPILE_RC=$?
+fi
+
+if [[ $COMPILE_RC -eq 0 ]]; then
+    if ! $QUIET; then
+        echo
+        success "Compilation succeeded!"
+    fi
 
     # Show summary if error log exists
     if [[ -f "$ERROR_LOG" ]]; then
-        # Check for any diagnostics (even if compilation succeeded)
         DIAGNOSTIC_COUNT=$(jq -r '.diagnostics | length' "$ERROR_LOG" 2>/dev/null || echo "0")
         if [[ "$DIAGNOSTIC_COUNT" -gt 0 ]]; then
             info "Diagnostics: $DIAGNOSTIC_COUNT (see $ERROR_LOG)"
@@ -544,6 +580,17 @@ if "${COMPILE_CMD[@]}" 2>&1; then
 
     exit 0
 else
+    if $QUIET; then
+        # Clean error-only output to stderr — designed for hooks/scripts
+        if [[ -f "$ERROR_LOG" ]] && command -v jq &>/dev/null; then
+            jq -r '.issues[] | select(.properties.severity == "Error") | .locations[0].analysisTarget[0] as $loc | "\($loc.uri):\($loc.region.startLine):\($loc.region.startColumn): \(.ruleId): \(.fullMessage)"' \
+                "$ERROR_LOG" >&2 2>/dev/null || true
+        else
+            echo "Compilation failed (no error log at $ERROR_LOG)" >&2
+        fi
+        exit 1
+    fi
+
     echo
     error "Compilation failed"
 
