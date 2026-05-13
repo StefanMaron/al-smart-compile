@@ -34,6 +34,13 @@ detect_platform() {
 
 PLATFORM=$(detect_platform)
 
+# Disable MSYS/Git Bash automatic path conversion on Windows.
+# Without this, arguments like /project:. and /analyzer:... get mangled
+# into Windows paths (e.g. C:/project:.) before reaching the AL compiler.
+if [[ "$PLATFORM" == "windows" ]]; then
+    export MSYS_NO_PATHCONV=1
+fi
+
 # Set platform-specific paths
 case "$PLATFORM" in
     windows)
