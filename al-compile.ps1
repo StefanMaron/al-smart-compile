@@ -278,13 +278,13 @@ if ($outputDir -and -not (Test-Path $outputDir)) {
 $compileCmd = @(
     $alCompiler
     "/project:."
-    "/packagecachepath:$packagePath"
+    "/packagecachepath:`"$packagePath`""
 )
 $compileCmd += $analyzerArgs
 
 # Add ruleset if found
 if ($ruleset) {
-    $compileCmd += "/ruleset:$ruleset"
+    $compileCmd += "/ruleset:`"$ruleset`""
     if (-not $NoRulesets) {
         $compileCmd += "/enableexternalrulesets"
     }
